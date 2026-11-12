@@ -1,6 +1,7 @@
 const $=s=>document.querySelector(s);
 let state=null,workflow='download',toastTimer,welcomeBusy=false;
 const sizes=n=>!Number.isFinite(n)||n<=0?'Size unavailable':n>=1e9?`${(n/1e9).toFixed(1)} GB`:n>=1e6?`${(n/1e6).toFixed(1)} MB`:n>=1000?`${(n/1000).toFixed(0)} KB`:`${Math.ceil(n)} B`;
+const mbps=bytesPerSecond=>`${(bytesPerSecond*8/1e6).toFixed(1)} Mbps`;
 const fileSize=f=>f?.filesize?`${f.sizeEstimate?'~ ':''}${sizes(f.filesize)}`:'Size unavailable';
 const timeText=n=>{if(!Number.isFinite(n)||n<0)return 'Calculating…';const total=Math.round(n),minutes=Math.floor(total/60),seconds=total%60;return `${minutes?`${minutes} min${seconds?` ${seconds} sec`:''}`:`${seconds} sec`} (${total} seconds)`;};
 const durationText=n=>Number.isFinite(n)&&n>0?timeText(n):'Not reported';
@@ -122,7 +123,7 @@ function renderJobs(){
     const metrics=document.createElement('dl');metrics.className='transfer-stats';
     const metric=(label,value,key)=>{const cell=document.createElement('div'),name=document.createElement('dt'),text=document.createElement('dd');name.textContent=label;text.textContent=value;text.dataset.metric=key;cell.append(name,text);metrics.append(cell);};
     const transferring=job.status==='downloading',done=['completed','skipped'].includes(job.status);
-    metric('Speed',transferring?(Number.isFinite(job.speed)?job.speed>0?`${sizes(job.speed)}/s`:'0 B/s':'Waiting for data…'):done?'Finished':job.status==='paused'?'Paused':'—','speed');
+    metric('Speed',transferring?(Number.isFinite(job.speed)?mbps(job.speed):'Waiting for data…'):done?'Finished':job.status==='paused'?'Paused':'—','speed');
     metric('Time remaining',done?'Complete':job.status==='processing'?'Finishing…':transferring?timeText(job.eta):job.status==='refreshing'?'After source check':job.status==='paused'?'Paused':'After transfer starts','eta');
     metric('Elapsed',timeText(job.elapsedSeconds||0),'elapsed');
     metric('Transferred',job.downloadedBytes>0?`${sizes(job.downloadedBytes)}${job.totalBytes?` / ${job.transferSizeEstimate?'~ ':''}${sizes(job.totalBytes)}`:''}`:job.estimatedBytes?`~ ${sizes(job.estimatedBytes)} expected`:'Waiting for data…','bytes');
