@@ -1,30 +1,48 @@
-# TurboSave
+<p align="center"><img src="desktop/build-resources/icon.png" alt="TurboSave logo" width="76"></p>
 
-Free, open-source media downloads on your own device. TurboSave has separate Android and Windows apps in this repository. It does not require a TurboSave account or hosted download service.
+<h1 align="center">TurboSave</h1>
 
-| App | Source | Current source version | Platform |
-| --- | --- | --- | --- |
-| Android | [android/](android/) | 1.5.3+13 | Android |
-| Desktop | [desktop/](desktop/) | 0.8.0-beta.5 | Windows 10/11 x64 |
+<p align="center"><strong>Free, open-source downloads. Your device. Your files.</strong></p>
 
-## Download and release status
+<p align="center">Choose the format, choose the folder, and keep media you have permission to save. TurboSave runs locally on Android and Windows without a TurboSave account.</p>
 
-See [Releases](https://github.com/chanthupaa/TurboSave/releases) for platform-specific source tags and any tested installers. Read each release's notes before installing. Android 1.5.3 currently includes changes that need physical-device validation. The Windows beta is unsigned, and its bundled dependencies need a corresponding-source review before public binary redistribution. A source release is not a finished installer.
+<p align="center">
+  <a href="https://github.com/chanthupaa/TurboSave/releases">Releases</a> ·
+  <a href="android/">Android source</a> ·
+  <a href="desktop/">Windows source</a> ·
+  <a href="https://github.com/chanthupaa/TurboSave/issues">Report an issue</a>
+</p>
 
-## What the apps do
+> **Release status:** The current Android and Windows GitHub prereleases contain source archives only. There is no installable APK or Windows installer attached yet. Android needs a newly signed, device-tested APK; the Windows binary needs its bundled dependencies' corresponding-source review completed. See [releases](https://github.com/chanthupaa/TurboSave/releases) for the exact status.
 
-- Choose a save folder and media format before downloading.
-- Download supported public links using local tools. Available formats depend on the source; DRM and site restrictions remain in effect.
-- Windows includes single, batch and YouTube playlist workflows, download history, pause/resume, and optional remembered Firefox YouTube sessions.
-- Android supports sharing a link into the app, reviewing available qualities, local downloads and an in-app media library.
+## See the apps
 
-Use TurboSave only for media you have permission to save. The apps cannot bypass DRM, account restrictions or source availability.
+| Windows desktop | Android phone |
+| --- | --- |
+| <img src="docs/images/windows-source-ui.png" alt="TurboSave Windows new download screen showing a save destination, link input and format search" width="680"> | <img src="docs/images/android-source-ui.png" alt="TurboSave Android home screen showing link entry and the Home, Activity, Library and Settings navigation" width="280"> |
+
+These are **UI previews rendered from the checked-in source** with empty or example data. They do not claim a successful download or a packaged-app test.
+
+## Pick your platform
+
+| | Android | Windows |
+| --- | --- | --- |
+| Current source | [1.5.3+13](android/) | [0.8.0-beta.5](desktop/) |
+| Main flow | Share or paste a link, review quality, save to the phone | Paste a link, choose media and destination, follow progress |
+| More tools | Activity and local media library | Batch downloads, YouTube playlist selection, history, pause and resume |
+| Source release | [Android prerelease](https://github.com/chanthupaa/TurboSave/releases/tag/android-v1.5.3-source) | [Windows prerelease](https://github.com/chanthupaa/TurboSave/releases/tag/desktop-v0.8.0-beta.5-source) |
+| Build guide | [Android README](android/README.md) | [Windows build guide](desktop/BUILD_GUIDE.md) |
+
+Available qualities and sites depend on the source. DRM, sign-in requirements and source restrictions still apply. TurboSave does not bypass them. The separate [Web project](https://github.com/chanthupaa/turbosave-web) is maintained outside this repository.
 
 ## Build from source
 
-### Android
+Clone the repository, then use the instructions for your platform. Generated builds, recovery archives, local signing material and private user data are excluded from Git.
 
-The [Android README](android/README.md) lists the Flutter, Android SDK, Python and signing prerequisites. From `android/`:
+<details>
+<summary><strong>Android</strong> · Flutter and Android SDK</summary>
+
+From `android/`:
 
 ```powershell
 flutter pub get
@@ -32,11 +50,14 @@ flutter analyze --no-pub lib test
 flutter test --no-pub
 ```
 
-The APK build requires local signing configuration that is not in this repository. Do not commit signing keys.
+The APK build needs local signing configuration. See the [Android README](android/README.md) and [release readiness](android/RELEASE_READINESS.md). Never commit a signing key.
 
-### Windows
+</details>
 
-The [Windows build guide](desktop/BUILD_GUIDE.md) and [dependency-source review](desktop/DEPENDENCY_SOURCES.md) explain packaging and redistribution. From `desktop/`:
+<details>
+<summary><strong>Windows</strong> · Node.js, Electron, yt-dlp and FFmpeg</summary>
+
+From `desktop/`:
 
 ```powershell
 npm ci
@@ -45,12 +66,12 @@ npm test
 npm run build
 ```
 
-## Contribute and report issues
+See the [build guide](desktop/BUILD_GUIDE.md) and [dependency-source review](desktop/DEPENDENCY_SOURCES.md) before distributing the bundled installer.
 
-Open a GitHub issue with the app, version, OS version and steps to reproduce. Remove private links, usernames, local paths, cookies and credentials from reports. See each app's contributing guide and [security policy](SECURITY.md).
+</details>
 
-## License
+## Help improve TurboSave
 
-TurboSave's original application code is [GPL-3.0-only](LICENSE). Third-party components retain their own licenses and notices in the platform folders. Publishing source does not resolve the additional obligations for redistributed binary dependencies.
+For a bug, [open an issue](https://github.com/chanthupaa/TurboSave/issues) with the app, version, OS and reproduction steps. Remove private URLs, usernames, paths, cookies and credentials. Security reports belong in a private channel; see [SECURITY.md](SECURITY.md). Contributions are welcome through the [Android](android/CONTRIBUTING.md) and [Windows](desktop/CONTRIBUTING.md) guides.
 
-The Web app remains a [separate project](https://github.com/chanthupaa/turbosave-web).
+TurboSave's original application code is [GPL-3.0-only](LICENSE). Third-party components keep their own licenses and notices in each platform folder. Use TurboSave only for media you have permission to save.
