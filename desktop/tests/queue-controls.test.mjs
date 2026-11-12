@@ -5,7 +5,7 @@ async function fixture(){const dir=await mkdtemp(path.join(os.tmpdir(),'turbosav
 test('queue ordering, priority, paused history and persisted preferences survive restart',async()=>{
  const {engine,dir}=await fixture();try{const ids=[];for(let i=0;i<3;i++)ids.push(await engine.enqueue({mediaId:'m'+i,formatId:'0'}));assert.deepEqual(engine.pending().map(j=>j.id),ids);
  await engine.move(ids[2],'first');assert.equal(engine.pending()[0].id,ids[2]);await engine.move(ids[2],'down');assert.equal(engine.pending()[1].id,ids[2]);await engine.pause(ids[0]);await engine.clearHistory();assert.equal(engine.jobs.length,3);
- await engine.setSettings({speedLimit:2000000,minimizeToTray:true,notifications:true,releaseRepo:'owner/turbosave-desktop'});await assert.rejects(()=>engine.setSettings({speedLimit:-1}));await assert.rejects(()=>engine.setSettings({releaseRepo:'https://evil.example/repo'}));
+ await engine.setSettings({speedLimit:2000000,minimizeToTray:true,notifications:true});await assert.rejects(()=>engine.setSettings({speedLimit:-1}));
  }finally{await engine.close();}
  const restored=new LocalEngine({toolsDir:dir,stateDir:dir,downloadsDir:path.join(dir,'downloads')});restored.run=async()=> 'fixture-version';try{await restored.init();assert.equal(restored.settings.speedLimit,2000000);assert.equal(restored.settings.minimizeToTray,true);assert.equal(restored.jobs.filter(j=>j.status==='paused').length,1);assert.equal(restored.pending().length,0,'Restart never automatically starts queued downloads');}finally{await restored.close();}
 });

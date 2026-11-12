@@ -137,7 +137,7 @@ handle('diagnostics:export',async()=>{
 });
 handle('updates:rollback',kind=>updates.rollback(kind));
 handle('updates:use-bundled',()=>engine.useBundledDownloader());
-handle('updates:open-release',async()=>{const info=await updates.check('app');if(!info.configured)throw Error(info.message);await shell.openExternal(info.releaseUrl);});
+handle('updates:open-release',async()=>{const info=await updates.check('app');if(!info.available)throw Error(info.message);await shell.openExternal(info.releaseUrl);});
 handle('duplicate:resolve',value=>engine.resolveDuplicate(value||{}));
 handle('history:clear',()=>engine.clearHistory());
 handle('duplicates:clear',async()=>{engine.library.entries=[];await engine.library.save();});

@@ -1,11 +1,28 @@
 // SPDX-License-Identifier: GPL-3.0-only
 import https from 'node:https';import {createHash} from 'node:crypto';import {publicTarget} from './media.mjs';
 import {readFile,writeFile} from 'node:fs/promises';import path from 'node:path';
-import {verifyRelease} from './release-auth.mjs';
-import releaseTrust from '../build-resources/update-trust.json' with {type:'json'};
 const hosts=new Set(['api.github.com','github.com','release-assets.githubusercontent.com','objects.githubusercontent.com','nodejs.org']);
-export const validRepo=value=>typeof value==='string'&&/^[\w-]{1,39}\/[\w.-]{1,100}$/.test(value);
-export function newer(latest,current){const numbers=value=>String(value).replace(/^v/,'').split('-')[0].split('.').map(Number);const a=numbers(latest),b=numbers(current);if([...a,...b].some(v=>!Number.isFinite(v)))return false;for(let i=0;i<Math.max(a.length,b.length);i++){if((a[i]||0)!==(b[i]||0))return (a[i]||0)>(b[i]||0);}return !String(latest).includes('-')&&String(current).includes('-');}
+export const desktopRepo='chanthupaa/TurboSave';
+export function newer(latest,current){
+  const parse=value=>{const match=String(value).replace(/^v/,'').match(/^(\d+)\.(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:-beta\.(\d+))?$/);return match&&{parts:match.slice(1,5).map(v=>Number(v||0)),beta:match[5]===undefined?null:Number(match[5])};};
+  const a=parse(latest),b=parse(current);if(!a||!b)return false;
+  for(let i=0;i<4;i++)if(a.parts[i]!==b.parts[i])return a.parts[i]>b.parts[i];
+  return a.beta===null&&b.beta!==null||a.beta!==null&&b.beta!==null&&a.beta>b.beta;
+}
+export function desktopRelease(releases,current){
+  if(!Array.isArray(releases))throw Error('GitHub returned an invalid release list.');
+  let best;
+  for(const release of releases){
+    const tag=release?.tag_name,match=typeof tag==='string'&&tag.match(/^desktop-v(\d+\.\d+\.\d+(?:-beta\.\d+)?)$/);
+    if(!match||release.draft||!newer(match[1],current))continue;
+    const assets=release.assets;if(!Array.isArray(assets))continue;
+    const base=`https://github.com/${desktopRepo}/releases/download/${encodeURIComponent(tag)}/`;
+    const binaries=assets.filter(asset=>['setup','portable'].some(type=>asset?.name===`TurboSave-Desktop-${match[1]}-${type}.exe`)&&Number.isSafeInteger(asset.size)&&asset.size>0&&asset.browser_download_url===base+asset.name);
+    if(!binaries.length)continue;
+    if(!best||newer(match[1],best.latest))best={kind:'app',current,latest:match[1],tag,available:true,releaseUrl:`https://github.com/${desktopRepo}/releases/tag/${encodeURIComponent(tag)}`};
+  }
+  return best||{kind:'app',current,available:false,message:'No newer installable Windows release is published yet. Source-only and Android releases are excluded.'};
+}
 export async function githubBytes(value,{limit=2_000_000,signal=AbortSignal.timeout(20_000)}={}){
   for(let hop=0;hop<5;hop++){
     const parsed=new URL(value);if(parsed.protocol!=='https:'||!hosts.has(parsed.hostname)||parsed.username||parsed.password||parsed.port)throw Error('Update host is not trusted.');
@@ -25,22 +42,18 @@ export async function githubBytes(value,{limit=2_000_000,signal=AbortSignal.time
 }
 export function checksumFor(text,name){const line=String(text).split(/\r?\n/).find(line=>new RegExp(`^[a-fA-F0-9]{64}\\s+\\*?${name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}$`).test(line.trim()));if(!line)throw Error('The official release has no matching SHA-256 checksum.');return line.trim().slice(0,64).toLowerCase();}
 export class UpdateService{
-  constructor({engine,appVersion,read=githubBytes,trust=releaseTrust}){this.engine=engine;this.appVersion=appVersion;this.read=read;this.trust=trust;this.busy=false;}
+  constructor({engine,appVersion,read=githubBytes}){this.engine=engine;this.appVersion=appVersion;this.read=read;this.busy=false;}
   async check(kind){
     if(['ffmpeg','node'].includes(kind))return this.toolRelease(kind);
     if(!['app','yt-dlp'].includes(kind))throw Error('Unknown update type.');
-    const repo=kind==='app'?this.engine.settings.releaseRepo:'yt-dlp/yt-dlp';if(!validRepo(repo))return {kind,configured:false,message:'Add your public desktop release repository in Settings first.'};
-    if(kind==='app'&&!this.trust.keys?.length)return {kind,configured:false,message:'Authenticated desktop updates are not configured in this beta. The maintainer must embed a release public key and publish signed release metadata.'};
+    if(kind==='app'){
+      const releases=JSON.parse((await this.read(`https://api.github.com/repos/${desktopRepo}/releases?per_page=30`)).toString('utf8'));
+      return desktopRelease(releases,this.appVersion);
+    }
+    const repo='yt-dlp/yt-dlp';
     const release=JSON.parse((await this.read(`https://api.github.com/repos/${repo}/releases/latest`)).toString('utf8'));
     const tag=String(release.tag_name||''),version=tag.replace(/^v/,'');
-    if(release.draft||release.prerelease||!(kind==='app'?/^\d{1,4}\.\d{1,4}\.\d{1,4}$/:/^\d{4}\.\d{2}\.\d{2}(?:\.\d+)?$/).test(version))throw Error('The release version could not be verified.');
-    if(kind==='app'){
-      const base=`https://github.com/${repo}/releases/download/${encodeURIComponent(tag)}/`;
-      const bytes=await this.read(base+'turbosave-release.json',{limit:100_000});
-      const signature=JSON.parse((await this.read(base+'turbosave-release.sig.json',{limit:10_000})).toString('utf8'));
-      const manifest=verifyRelease(bytes,signature,this.trust,{repository:repo,version});
-      for(const asset of manifest.assets){const published=release.assets?.filter(item=>item.name===asset.name);if(published?.length!==1||published[0].size!==asset.bytes||published[0].digest!==`sha256:${asset.sha256}`||published[0].browser_download_url!==base+asset.name)throw Error('Published assets differ from the signed release.');}
-    }
+    if(release.draft||release.prerelease||!/^\d{4}\.\d{2}\.\d{2}(?:\.\d+)?$/.test(version))throw Error('The release version could not be verified.');
     const current=kind==='app'?this.appVersion:this.engine.versions['yt-dlp'];
     return {kind,configured:true,current,latest:version,tag,available:current==='Not available'||!current||newer(version,current),releaseUrl:`https://github.com/${repo}/releases/tag/${encodeURIComponent(tag)}`};
   }

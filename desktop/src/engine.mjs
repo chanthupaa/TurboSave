@@ -19,7 +19,7 @@ import {youtubeSource,sessionRequired} from './youtube-session.mjs';
 import engineManifest from '../build-resources/engines-manifest.json' with {type:'json'};
 const unfinished = status => ['draft','queued','refreshing','downloading','processing','duplicate','paused','interrupted'].includes(status);
 const stopped=job=>['cancelled','paused','interrupted'].includes(job.status);
-export const defaultSettings={speedLimit:0,downloadProfile:'fast',theme:'system',dailyEngineChecks:true,minimizeToTray:false,notifications:false,releaseRepo:'chanthupaa/turbosave-desktop'};
+export const defaultSettings={speedLimit:0,downloadProfile:'fast',theme:'system',dailyEngineChecks:true,minimizeToTray:false,notifications:false};
 
 export function processEnv() {
   return Object.fromEntries(['SystemRoot','WINDIR','TEMP','TMP','USERPROFILE','LOCALAPPDATA','APPDATA','HOMEDRIVE','HOMEPATH'].filter(k=>process.env[k]).map(k=>[k,process.env[k]]));
@@ -108,10 +108,10 @@ export class LocalEngine extends EventEmitter {
     this.changed();return this.snapshot();
   }
   async clearHistory() { this.jobs=this.jobs.filter(j=>unfinished(j.status)); await this.save(); this.changed(); }
-  validSettings(value){return {speedLimit:Number.isInteger(value.speedLimit)&&value.speedLimit>=0&&value.speedLimit<=100_000_000?value.speedLimit:0,downloadProfile:['fast','balanced','gentle'].includes(value.downloadProfile)?value.downloadProfile:'fast',theme:['dark','light','system'].includes(value.theme)?value.theme:'system',dailyEngineChecks:value.dailyEngineChecks!==false,minimizeToTray:value.minimizeToTray===true,notifications:value.notifications===true,releaseRepo:typeof value.releaseRepo==='string'&&/^[\w-]{1,39}\/[\w.-]{1,100}$/.test(value.releaseRepo)?value.releaseRepo:''};}
+  validSettings(value){return {speedLimit:Number.isInteger(value.speedLimit)&&value.speedLimit>=0&&value.speedLimit<=100_000_000?value.speedLimit:0,downloadProfile:['fast','balanced','gentle'].includes(value.downloadProfile)?value.downloadProfile:'fast',theme:['dark','light','system'].includes(value.theme)?value.theme:'system',dailyEngineChecks:value.dailyEngineChecks!==false,minimizeToTray:value.minimizeToTray===true,notifications:value.notifications===true};}
   async setSettings(value){
     if(!value||typeof value!=='object')throw Error('Invalid preferences.');
-    const next=this.validSettings({...this.settings,...value});if(value.releaseRepo&&next.releaseRepo!==value.releaseRepo)throw Error('Enter a GitHub repository as owner/repository.');
+    const next=this.validSettings({...this.settings,...value});
     if(value.speedLimit!==undefined&&next.speedLimit!==value.speedLimit)throw Error('Choose a valid speed limit.');
     if(value.downloadProfile!==undefined&&next.downloadProfile!==value.downloadProfile)throw Error('Choose a valid download profile.');
     if(value.theme!==undefined&&next.theme!==value.theme)throw Error('Choose a valid appearance.');

@@ -17,7 +17,7 @@ async function fixture({welcome=false,duplicate=false,initialJobs=[],extraMedia=
     removeDraft:async id=>{state.jobs=state.jobs.filter(j=>j.id!==id);emit();},startBatch:async()=>{calls.starts++;const ids=state.jobs.map(j=>j.id);state.jobs.forEach(j=>j.status='queued');emit();return ids;},
     download:async selection=>{checkDuplicate(selection);calls.single.push(selection);return 'single';},resolveDuplicate:async choice=>{calls.resolutions.push(choice);const job=state.jobs.find(j=>j.id===choice.jobId);job.status=choice.action==='keep-existing'?'skipped':'processing';job.filePath=job.duplicate.path;emit();},paste:async()=>'',openFolder:async()=>{},clearHistory:async()=>{},project:async()=>{},cancel:async id=>{calls.cancelled.push(id);state.jobs.find(j=>j.id===id).status='cancelled';emit();},reveal:async()=>{}};
   w.turbo.pause=async id=>{calls.paused.push(id);state.jobs.find(j=>j.id===id).status='paused';emit();};w.turbo.retry=async id=>{calls.retried.push(id);state.jobs.find(j=>j.id===id).status='queued';emit();};w.turbo.move=async(id,direction)=>{calls.moves.push({id,direction});};w.turbo.settings=async value=>{calls.settings.push(value);state.settings={...state.settings,...value};emit();};
-  w.turbo.checkUpdates=async kind=>kind==='app'?{configured:false,message:'Add a release repository first.'}:{current:'2026.10.25',latest:'2026.10.26',available:true};
+  w.turbo.checkUpdates=async kind=>kind==='app'?{available:false,message:'No newer installable Windows release is published yet.'}:{current:'2026.10.25',latest:'2026.10.26',available:true};
   w.turbo.youtubeProfiles=async()=>({profiles:[{id:'Profile0',name:'Test Firefox'}]});w.turbo.openYouTube=async id=>calls.youtube.push(['open',id]);w.turbo.connectYouTube=async id=>{calls.youtube.push(['connect',id]);state.youtube={connected:true,needsReconnect:false};emit();return state.youtube;};w.turbo.disconnectYouTube=async()=>{calls.youtube.push(['disconnect']);state.youtube={connected:false,needsReconnect:false};emit();return state.youtube;};
   w.eval(script);await tick();
   const composerIds=new Set(['#source-url','#link-form','#fetch','#paste','#result','#download','#format','#message','#media-thumbnail','#thumbnail-placeholder']);
@@ -26,6 +26,14 @@ async function fixture({welcome=false,duplicate=false,initialJobs=[],extraMedia=
   return {dom,$,calls,click,fetch,folder:value=>folderChoice=value,updateState:async value=>{Object.assign(state,value);emit();await tick();},failFetch:()=>rejectFetch=true,failFinish:()=>finishError=true};
 }
 
+test('app update action enables the release link only for a newer Windows build',async()=>{
+ const f=await fixture();try{
+  assert.equal(f.$('#release-repo'),null);assert.equal(f.$('#save-release-repo'),null);
+  let opened=0;f.dom.window.turbo.checkUpdates=async()=>({kind:'app',available:true,latest:'0.8.0-beta.6'});f.dom.window.turbo.openAppRelease=async()=>{opened++;};
+  await f.click('#check-app-update');assert.match(f.$('#app-update-status').textContent,/0\.8\.0-beta\.6 is available/);assert.equal(f.$('#open-app-release').disabled,false);
+  await f.click('#open-app-release');assert.equal(opened,1);
+ }finally{f.dom.window.close();}
+});
 test('YouTube connection is explicit, guided and reconnectable without exposing session values',async()=>{
   const f=await fixture();try{assert.equal(f.calls.youtube.length,0);assert.equal(f.$('#youtube-disconnect').hidden,true);
     await f.click('#youtube-connect');assert.equal(f.$('#youtube-dialog').open,true);assert.equal(f.$('#youtube-profile').value,'Profile0');assert.match(f.$('#youtube-dialog').textContent,/Only YouTube cookies/);
@@ -120,7 +128,7 @@ test('Activity pause, resume, reorder and Settings controls call only the narrow
  const press=async text=>{[...f.dom.window.document.querySelectorAll('#job-list button')].find(b=>b.textContent===text).click();await tick();};
  try{await press('Next');assert.equal(f.calls.moves[0].direction,'first');await press('Pause');assert.deepEqual(f.calls.paused,['q']);await press('Resume');assert.deepEqual(f.calls.retried,['q']);
  f.$('#speed-limit').value='2000000';f.$('#speed-limit').dispatchEvent(new f.dom.window.Event('change'));await tick();assert.equal(f.calls.settings[0].speedLimit,2000000);f.$('#minimize-tray').checked=true;f.$('#minimize-tray').dispatchEvent(new f.dom.window.Event('change'));await tick();assert.equal(f.calls.settings[1].minimizeToTray,true);
- await f.click('#check-app-update');assert.match(f.$('#app-update-status').textContent,/release repository/);await f.click('#check-engine-update');assert.equal(f.$('#install-engine-update').disabled,false);
+ await f.click('#check-app-update');assert.match(f.$('#app-update-status').textContent,/No newer installable Windows release/);assert.equal(f.$('#open-app-release').disabled,true);await f.click('#check-engine-update');assert.equal(f.$('#install-engine-update').disabled,false);
  }finally{f.dom.window.close();}
 });
 test('duplicate prompt defaults to keeping the existing file without creating another download',async()=>{

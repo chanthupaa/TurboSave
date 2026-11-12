@@ -25,7 +25,7 @@ Reference: https://www.electron.build/code-signing-win and https://learn.microso
 
 ## Authenticated desktop release metadata
 
-This is separate from Authenticode. `build-resources/update-trust.json` deliberately contains no fake/default signing key. Desktop release checks fail closed until the maintainer provisions one. Engine repair continues to use official publishers' HTTPS endpoints and checksums.
+This is separate from Authenticode. `build-resources/update-trust.json` deliberately contains no fake/default signing key. The current desktop checker only discovers a matching Windows release on the fixed TurboSave GitHub repository and opens its release page in a browser; it never downloads or executes an installer. Signed metadata remains available for a future authenticated binary delivery flow. Engine repair continues to use official publishers' HTTPS endpoints and checksums.
 
 1. In a private terminal, set `TURBOSAVE_RELEASE_KEY_DIRECTORY` to a **new directory outside the repository**, and `TURBOSAVE_RELEASE_KEY_ID` to a public identifier such as `desktop-2026`. Run `npm run release:keygen`. On Windows the script restricts the directory ACL to your user and SYSTEM before writing a private key.
 2. Securely back up `release-private.pem`. Never commit, upload or paste it. Copy only the public JSON record from `public-key.json` into the `keys` array of `build-resources/update-trust.json`. Review and rebuild. The public key must reach users in a trusted installer before it can authenticate later releases.
