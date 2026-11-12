@@ -25,8 +25,9 @@ export class ToolStore{
   async install(kind,bytes,{version,sha256}){
     if(!names[kind]||!/^[\w.+-]{1,80}$/.test(version)||hash(bytes)!==sha256)throw Error('Tool archive verification failed.');
     const e=this.engine,folder=`${kind}-${version}-${randomUUID()}`,dir=path.join(e.stateDir,'managed-tools',folder);
-    await mkdir(dir,{recursive:true});const archive=path.join(dir,'verified.zip');await writeFile(archive,bytes,{flag:'wx'});
+    await mkdir(dir,{recursive:true});const archive=path.join(dir,'verified.zip');let installed=false;
     try{
+      await writeFile(archive,bytes,{flag:'wx'});
       const extracts=names[kind].map(name=>`$entry=@($zip.Entries|Where-Object {$_.FullName.EndsWith(${quote('/'+(kind==='ffmpeg'?'bin/':'')+name+'.exe')})});if($entry.Count -ne 1 -or $entry[0].Length -gt 200000000){throw 'Unexpected archive content'};[IO.Compression.ZipFileExtensions]::ExtractToFile($entry[0],${quote(path.join(dir,name+'.exe'))},$false);`).join('');
       await e.run(windowsSystemTool('powershell'),['-NoProfile','-NonInteractive','-Command',`$ErrorActionPreference='Stop';Add-Type -AssemblyName System.IO.Compression.FileSystem;$zip=[IO.Compression.ZipFile]::OpenRead(${quote(archive)});try{${extracts}}finally{$zip.Dispose()}`],{timeout:60_000});
       const files=[];
@@ -40,7 +41,12 @@ export class ToolStore{
       const record={enabled:true,folder,version,files};
       const previous=this.records[kind];this.records[kind]=record;try{await this.save();}catch(error){if(previous)this.records[kind]=previous;else delete this.records[kind];throw error;}
       for(const file of files){e.toolOverrides[file.name]=path.join(dir,file.name+'.exe');e.versions[file.name]=file.version;}
-    }finally{await rm(archive,{force:true}).catch(()=>{});}
+      installed=true;
+    }finally{
+      await rm(archive,{force:true}).catch(()=>{});
+      if(!installed)try{await rm(dir,{recursive:true,force:true,maxRetries:3,retryDelay:100});}
+      catch{e.engineUpdateWarning='An incomplete engine update folder could not be removed. Restart TurboSave and retry repair.';e.changed();}
+    }
   }
   async save(){const file=path.join(this.engine.stateDir,'tools-state.json');await writeFile(file+'.tmp',JSON.stringify(this.records),{mode:0o600});await rename(file+'.tmp',file);}
   async rollback(kind){

@@ -12,7 +12,7 @@ export function playlistFormat(formats,{kind,height}){
   return formats.filter(f=>f.kind==='video'&&f.sound==='with'&&(!height||f.height<=height)).sort((a,b)=>b.height-a.height||(a.extension==='mp4'?-1:1)-(b.extension==='mp4'?-1:1))[0];
 }
 export class PlaylistManager{
-  constructor(engine){this.engine=engine;this.groups=[];this.previews=new Map();}
+  constructor(engine){this.engine=engine;this.groups=[];this.committingGroups=new Set();this.previews=new Map();}
   restore(groups){const valid=Array.isArray(groups)?groups.filter(g=>g&&typeof g.id==='string'&&Array.isArray(g.entries)&&g.entries.length<=PLAYLIST_LIMIT&&['video','audio'].includes(g.preference?.kind)&&typeof g.directory==='string'):[];this.groups=[...valid.filter(g=>!['completed','cancelled'].includes(g.status)).slice(0,20),...valid.filter(g=>['completed','cancelled'].includes(g.status)).slice(0,20)].map(g=>({...g,status:['completed','cancelled'].includes(g.status)?g.status:'paused',entries:g.entries.map(e=>({...e}))}));}
   async inspect({source,id,offset=0}={}){
     const e=this.engine;if(!e.ready||e.maintenance||e.closing)throw Error('Wait for the local engines to be ready.');
@@ -50,11 +50,20 @@ export class PlaylistManager{
     const selected=new Set(keys);if(selected.size!==keys.length||keys.some(key=>!preview.entries.some(row=>row.key===key)))throw Error('The playlist selection is invalid.');
     directory??=e.downloadsDir;await e.checkFolder(directory);
     const group={id:randomUUID(),title:preview.title,source:preview.source,directory,preference:{kind,height},status:'running',createdAt:Date.now(),entries:preview.entries.filter(row=>selected.has(row.key)).map(row=>({...row,status:row.available?'pending':'unavailable',error:row.available?null:'This entry is unavailable.'}))};
-    this.groups.unshift(group);const live=this.groups.filter(g=>!['completed','cancelled'].includes(g.status));this.groups=[...live,...this.groups.filter(g=>!live.includes(g)).slice(0,20)];await e.save();e.changed();void e.pump();return group.id;
+    const previousGroups=this.groups.slice();this.groups.unshift(group);const live=this.groups.filter(g=>!['completed','cancelled'].includes(g.status));this.groups=[...live,...this.groups.filter(g=>!live.includes(g)).slice(0,20)];this.committingGroups.add(group.id);
+    try{await e.save();}
+    catch(error){
+      this.groups=this.groups.filter(item=>item!==group);
+      for(const previous of previousGroups)if(!this.groups.includes(previous))this.groups.push(previous);
+      this.committingGroups.delete(group.id);
+      e.changed();await e.save().catch(()=>{});
+      throw error;
+    }
+    this.committingGroups.delete(group.id);e.changed();void e.pump();return group.id;
   }
   feed(){
     const e=this.engine;if(e.jobs.filter(j=>['draft','queued','paused','interrupted','refreshing','downloading','processing','duplicate'].includes(j.status)).length>=20)return;
-    const group=[...this.groups].reverse().find(g=>g.status==='running'&&g.entries.some(row=>row.status==='pending'));if(!group)return;
+    const group=[...this.groups].reverse().find(g=>!this.committingGroups.has(g.id)&&g.status==='running'&&g.entries.some(row=>row.status==='pending'));if(!group)return;
     const entry=group.entries.find(row=>row.status==='pending');
     const job={id:randomUUID(),playlistGroup:group.id,playlistIndex:entry.index,source:entry.source,title:entry.title,platform:'YouTube',format:{kind:group.preference.kind,mode:'playlist',targetHeight:group.preference.height,extension:group.preference.kind==='audio'?'mp3':'mp4',sound:'with'},formatLabel:group.preference.kind==='audio'?'MP3':'Checking quality',directory:group.directory,queueOrder:e.nextOrder(),needsRefresh:true,status:'queued',createdAt:Date.now(),progress:0,elapsedMs:0};
     entry.status='queued';entry.jobId=job.id;e.jobs.unshift(job);

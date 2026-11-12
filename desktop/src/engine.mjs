@@ -27,7 +27,7 @@ export function processEnv() {
 export class LocalEngine extends EventEmitter {
   constructor({ toolsDir, stateDir, downloadsDir }) {
     super(); this.toolsDir=toolsDir; this.stateDir=stateDir; this.downloadsDir=downloadsDir;
-    this.jobs=[];this.settings={...defaultSettings};this.onboardingComplete=false;this.ready=false;this.initializing=true; this.media=new Map(); this.children=new Set();this.active=null; this.inspecting=false; this.closing=false; this.lastWrite=Promise.resolve();
+    this.jobs=[];this.committingJobs=new Set();this.settings={...defaultSettings};this.onboardingComplete=false;this.ready=false;this.initializing=true; this.media=new Map(); this.children=new Set();this.active=null; this.inspecting=false; this.closing=false; this.lastWrite=Promise.resolve();
     this.library=new DuplicateLibrary({stateDir,tool:name=>this.tool(name),run:(...args)=>this.run(...args),runBytes:(file,args,options)=>this.run(file,args,{...options,asBuffer:true})});
     this.loadThumbnail=loadThumbnail;
     this.playlists=new PlaylistManager(this);this.toolOverrides={};this.toolStore=new ToolStore(this);
@@ -83,7 +83,7 @@ export class LocalEngine extends EventEmitter {
     this.changed();
   }
   elapsedMs(job){return Math.max(0,Number(job.elapsedMs)||0)+(this.active?.job.id===job.id&&Number.isFinite(this.active.startedAt)?Math.max(0,(this.active.stoppedAt||Date.now())-this.active.startedAt):0);}
-  snapshot() { return { jobs:this.jobs.map(({format,sourceKeys,stageName,stageToken,...j})=>({...j,elapsedSeconds:Math.floor(this.elapsedMs(j)/1000),kind:format?.kind,resumable:['paused','interrupted'].includes(j.status)})),playlists:this.playlists.groups.map(g=>({...g,entries:g.entries.map(({source,...entry})=>entry)})),youtube:this.youtube?.snapshot()||{connected:false,needsReconnect:false},settings:{...this.settings},maintenance:Boolean(this.maintenance),toolStatus:this.toolStatus||null,engineUpdates:this.engineUpdates||null,engineUpdateWarning:this.engineUpdateWarning||null,downloadsDir:this.downloadsDir,onboardingComplete:this.onboardingComplete,ready:this.ready&&!this.maintenance,initializing:this.initializing,versions:this.versions,activeId:this.active?.job.id||null }; }
+  snapshot() { return { jobs:this.jobs.filter(j=>!this.committingJobs.has(j.id)).map(({format,sourceKeys,stageName,stageToken,...j})=>({...j,elapsedSeconds:Math.floor(this.elapsedMs(j)/1000),kind:format?.kind,resumable:['paused','interrupted'].includes(j.status)})),playlists:this.playlists.groups.filter(g=>!this.playlists.committingGroups.has(g.id)).map(g=>({...g,entries:g.entries.map(({source,...entry})=>entry)})),youtube:this.youtube?.snapshot()||{connected:false,needsReconnect:false},settings:{...this.settings},maintenance:Boolean(this.maintenance),toolStatus:this.toolStatus||null,engineUpdates:this.engineUpdates||null,engineUpdateWarning:this.engineUpdateWarning||null,downloadsDir:this.downloadsDir,onboardingComplete:this.onboardingComplete,ready:this.ready&&!this.maintenance,initializing:this.initializing,versions:this.versions,activeId:this.active?.job.id||null }; }
   changed() {for(const job of this.jobs)if(job.playlistGroup)this.playlists.sync(job);this.emit('state',this.snapshot()); }
   save() {
     for(const job of this.jobs)if(job.playlistGroup)this.playlists.sync(job);
@@ -117,7 +117,7 @@ export class LocalEngine extends EventEmitter {
     if(value.theme!==undefined&&next.theme!==value.theme)throw Error('Choose a valid appearance.');
     this.settings=next;await this.save();this.changed();return this.settings;
   }
-  pending(status='queued'){return this.jobs.filter(j=>j.status===status).sort((a,b)=>(a.queueOrder||0)-(b.queueOrder||0)||a.createdAt-b.createdAt);}
+  pending(status='queued'){return this.jobs.filter(j=>j.status===status&&!this.committingJobs.has(j.id)).sort((a,b)=>(a.queueOrder||0)-(b.queueOrder||0)||a.createdAt-b.createdAt);}
   nextOrder(){return Math.max(0,...this.jobs.map(j=>j.queueOrder||0))+1;}
   async move(id,direction){
     const job=this.jobs.find(j=>j.id===id&&['queued','draft'].includes(j.status));if(!job||!['up','down','first'].includes(direction))throw Error('Only waiting items can be reordered.');
@@ -234,11 +234,21 @@ export class LocalEngine extends EventEmitter {
     const soundLabel=format.kind==='video'?{with:'With sound',without:'Without sound',unknown:'Sound not specified'}[format.sound]:null;
     const job={id:randomUUID(),source:media.source,title:media.title,platform:media.platform,format:{...format},formatLabel:[format.quality,format.extension.toUpperCase(),soundLabel].filter(Boolean).join(' · '),
       queueOrder:this.nextOrder(),estimatedBytes:format.filesize||null,sizeEstimate:format.sizeEstimate!==false,duration:media.duration||null,directory,sourceKeys:keys,allowDuplicate:allowDuplicate===true,status,progress:0,speed:null,eta:null,elapsedMs:0,downloadedBytes:0,totalBytes:null,createdAt:Date.now(),error:null,filePath:null};
-    this.jobs.unshift(job);
+    const previousJobs=this.jobs.slice();this.jobs.unshift(job);
     const live=this.jobs.filter(j=>unfinished(j.status));
     const history=this.jobs.filter(j=>!live.includes(j)).slice(0,100-live.length);
     this.jobs=[...live,...history].sort((a,b)=>b.createdAt-a.createdAt);
-    await this.save();this.changed();if(status==='queued')void this.pump();return job.id;
+    this.committingJobs.add(job.id);
+    try{await this.save();}
+    catch(error){
+      this.jobs=this.jobs.filter(item=>item!==job);
+      for(const previous of previousJobs)if(!this.jobs.includes(previous))this.jobs.push(previous);
+      this.jobs.sort((a,b)=>b.createdAt-a.createdAt);
+      this.committingJobs.delete(job.id);
+      this.changed();await this.save().catch(()=>{});
+      throw error;
+    }
+    this.committingJobs.delete(job.id);this.changed();if(status==='queued')void this.pump();return job.id;
   }
   async removeDraft(id) {
     const job=this.jobs.find(j=>j.id===id&&j.status==='draft');
