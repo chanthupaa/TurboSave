@@ -1,0 +1,22 @@
+# Local build output and credentials
+**/node_modules/
+**/vendor/
+**/release/
+**/artifacts/
+**/build/
+**/.dart_tool/
+**/.gradle/
+**/.kotlin/
+**/.env*
+**/*.apk
+**/*.aab
+**/*.jks
+**/*.keystore
+**/*.p12
+**/*.pfx
+**/*.pem
+**/*.key
+**/key.properties
+**/local.properties
+**/_private-backups/
+**/_recovery/

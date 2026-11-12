@@ -1,0 +1,34 @@
+TurboSave recovery changelog
+25 October 2026
+
+Recovered the 25 app Dart source files and 6 app assets byte-for-byte from
+TurboSave-1.4.1-debug.apk into this separate project. Original APK and website
+files are preserved.
+
+Reconstructed pubspec.yaml from APK version metadata, source imports and embedded
+package versions. The original dependency manifest and lockfile were not stored
+in the APK. Added analysis_options.yaml to exclude recovery tooling/references.
+
+Preserved embedded Python bytecode and requirement metadata as recovery evidence.
+Native Android recovery and full runtime/release validation are separate from
+the recovered Dart source and static analysis.
+
+See RECOVERY.md for the final validation results and remaining missing files.
+
+25 October 2026 - local web preview
+Added a minimal new web/index.html to run the recovered Flutter app in a browser.
+This web scaffold is reconstructed, not extracted from the APK. Original recovered
+Dart files are unchanged. Android local extraction and native download handling
+remain unavailable in the browser preview.
+Reconstructed lib/utils/web_downloader_web.dart for the conditional browser
+export, which is absent from the Android APK. Added package:web 1.1.1, already
+present in the resolved dependency cache. The 25 APK-recovered files are unchanged.
+
+25 October 2026 - functional pipeline audit
+Added flutter_test development support and 22 pipeline/contract/widget tests.
+Native paths use simulated Android responses: 17 pass and 5 deliberately expose
+unfixed defects (including a widget assertion also observed in the browser).
+Added isolated probes for the APK's original Python
+bytecode/yt-dlp, real public sample extraction and a bounded sample-file download.
+Recorded live social results, successful full MP4 decoding and mobile preview
+evidence in PIPELINE_AUDIT.md and _recovery/. No recovered app behavior was fixed.

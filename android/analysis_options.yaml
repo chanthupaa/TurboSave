@@ -1,0 +1,8 @@
+# Recovery tooling/reference snapshots are not part of the Flutter application.
+analyzer:
+  exclude:
+    - _private-backups/cleanup-20261009-013903/**
+    - _recovery/**
+    - build/**
+    - web/**
+    - android/**
