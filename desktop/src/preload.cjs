@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 const {contextBridge,ipcRenderer}=require('electron');
-const invoke=async(channel,...args)=>{const result=await ipcRenderer.invoke(channel,...args);if(!result.ok){const error=new Error(result.error);if(result.code==='DUPLICATE_MEDIA'){error.code=result.code;error.duplicates=result.duplicates;}throw error;}return result.data;};
+const invoke=async(channel,...args)=>{const result=await ipcRenderer.invoke(channel,...args);if(!result.ok){const error=new Error(result.error);if(['DUPLICATE_MEDIA','OUTPUT_NAME_CONFLICT'].includes(result.code)){error.code=result.code;error.duplicates=result.duplicates;}throw error;}return result.data;};
 contextBridge.exposeInMainWorld('turbo',Object.freeze({
-  state:()=>invoke('state:get'),inspect:(url,directory)=>invoke('media:inspect',url,directory),retryPreview:value=>invoke('media:preview',value),download:selection=>invoke('download:add',selection),cancel:id=>invoke('download:cancel',id),
+  state:()=>invoke('state:get'),inspect:(url,directory)=>invoke('media:inspect',url,directory),retryPreview:value=>invoke('media:preview',value),quickDuplicate:value=>invoke('media:quick-duplicate',value),download:selection=>invoke('download:add',selection),cancel:id=>invoke('download:cancel',id),
   inspectPlaylist:value=>invoke('playlist:inspect',value),startPlaylist:value=>invoke('playlist:start',value),controlPlaylist:(id,action)=>invoke('playlist:control',id,action),retryPlaylistEntry:(id,key)=>invoke('playlist:retry',id,key),updateDraft:value=>invoke('bulk:update',value),
   youtubeProfiles:()=>invoke('youtube:profiles'),openYouTube:id=>invoke('youtube:open',id),connectYouTube:id=>invoke('youtube:connect',id),disconnectYouTube:()=>invoke('youtube:disconnect'),
   pause:id=>invoke('download:pause',id),retry:id=>invoke('download:retry',id),move:(id,direction)=>invoke('queue:move',id,direction),settings:value=>invoke('settings:set',value),

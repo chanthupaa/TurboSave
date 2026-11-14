@@ -31,7 +31,7 @@ const uiPath=path.join(root,'ui','index.html'),uiUrl=pathToFileURL(uiPath).href;
 function assertSender(event) {
   assertTrustedSender(event,window,uiUrl);
 }
-function handle(name,callback){ipcMain.handle(name,async(event,...args)=>{assertSender(event);try{return{ok:true,data:await callback(...args)};}catch(error){return{ok:false,error:error.message||'The operation could not be completed.',...(error.code==='DUPLICATE_MEDIA'?{code:error.code,duplicates:error.duplicates}:{})};}});}
+function handle(name,callback){ipcMain.handle(name,async(event,...args)=>{assertSender(event);try{return{ok:true,data:await callback(...args)};}catch(error){return{ok:false,error:error.message||'The operation could not be completed.',...(['DUPLICATE_MEDIA','OUTPUT_NAME_CONFLICT'].includes(error.code)?{code:error.code,duplicates:error.duplicates}:{})};}});}
 function showApp(){if(window&&!window.isDestroyed()){if(window.isMinimized())window.restore();window.show();window.focus();}}
 app.on('second-instance',showApp);
 // Finish evaluating the ESM entry point before waiting for Electron's ready event.
@@ -94,6 +94,7 @@ engine.on('state',state=>{if(!window?.isDestroyed())window.webContents.send('sta
 handle('state:get',()=>({...engine.snapshot(),version:app.getVersion(),license:'GPL-3.0-only',bootError}));
 handle('media:inspect',(value,directory)=>engine.inspect(value,{directory:directory||engine.downloadsDir}));
 handle('media:preview',value=>engine.retryPreview(value));
+handle('media:quick-duplicate',value=>engine.quickDuplicate(value||{}));
 handle('playlist:inspect',value=>engine.playlists.inspect(value));
 handle('playlist:start',value=>engine.playlists.start(value));
 handle('playlist:control',(id,action)=>engine.playlists.control(id,action));

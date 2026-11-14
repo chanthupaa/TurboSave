@@ -1,10 +1,8 @@
-<p align="center"><img src="desktop/build-resources/icon.png" alt="TurboSave logo" width="76"></p>
+<p align="center"><img src="docs/images/turbosave-cover.png" alt="TurboSave. Save videos. Watch offline. Free and open source for Android and Windows."></p>
 
 <h1 align="center">TurboSave</h1>
 
-<p align="center"><strong>Free, open-source downloads. Your device. Your files.</strong></p>
-
-<p align="center">Choose the format, choose the folder, and keep media you have permission to save. TurboSave runs locally on Android and Windows without a TurboSave account.</p>
+<p align="center">Paste a link, choose a quality, and save videos for offline playback. TurboSave runs on Android and Windows without a TurboSave account.</p>
 
 <p align="center">
   <a href="https://github.com/chanthupaa/TurboSave/releases">Releases</a> ·
@@ -13,7 +11,12 @@
   <a href="https://github.com/chanthupaa/TurboSave/issues">Report an issue</a>
 </p>
 
-> **Release status:** The current Android and Windows GitHub prereleases contain source archives only. There is no installable APK or Windows installer attached yet. Android needs a newly signed, device-tested APK; the Windows binary needs its bundled dependencies' corresponding-source review completed. See [releases](https://github.com/chanthupaa/TurboSave/releases) for the exact status.
+> **Installation status:** GitHub currently offers source downloads for Android and Windows. The latest source is on `main`. The tagged prereleases are earlier snapshots and have no APK or Windows executable attached. See the [Android release checklist](android/RELEASE_READINESS.md) and [Windows dependency-source review](desktop/DEPENDENCY_SOURCES.md) for the remaining work.
+
+## What you can do
+
+- **Android:** Share or paste a video link, review available formats, and open saved media from your local library.
+- **Windows:** Pick a folder, queue a batch, or select videos from a public YouTube playlist. The latest beta source adds a filename warning and an optional visual duplicate check that samples short sections before you start the full download.
 
 ## See the apps
 
@@ -30,7 +33,7 @@ These are **UI previews rendered from the checked-in source** with empty or exam
 | Current source | [1.5.3+13](android/) | [0.8.0-beta.5](desktop/) |
 | Main flow | Share or paste a link, review quality, save to the phone | Paste a link, choose media and destination, follow progress |
 | More tools | Activity and local media library | Batch downloads, YouTube playlist selection, history, pause and resume |
-| Source release | [Android prerelease](https://github.com/chanthupaa/TurboSave/releases/tag/android-v1.5.3-source) | [Windows prerelease](https://github.com/chanthupaa/TurboSave/releases/tag/desktop-v0.8.0-beta.5-source) |
+| Tagged source snapshot | [Android 1.5.3 prerelease](https://github.com/chanthupaa/TurboSave/releases/tag/android-v1.5.3-source) | [Windows beta.5 prerelease](https://github.com/chanthupaa/TurboSave/releases/tag/desktop-v0.8.0-beta.5-source) |
 | Build guide | [Android README](android/README.md) | [Windows build guide](desktop/BUILD_GUIDE.md) |
 
 Available qualities and sites depend on the source. DRM, sign-in requirements and source restrictions still apply. TurboSave does not bypass them. The separate [Web project](https://github.com/chanthupaa/turbosave-web) is maintained outside this repository.

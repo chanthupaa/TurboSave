@@ -20,6 +20,11 @@ test('source warnings survive history clearing and require an existing matching 
   const other=path.join(dir,'other');await mkdir(other);assert.equal((await engine.library.known(engine.media.get('m').keys,other,'video')).length,0);
   await writeFile(file,'a different file now');assert.equal((await engine.library.known(engine.media.get('m').keys,engine.downloadsDir,'video')).length,0);await engine.close();
 });
+test('same planned output filename warns before any download and does not claim matching content',async()=>{
+  const {engine}=await engineFixture();const existing=path.join(engine.downloadsDir,'Test video - 720p.mp4');await writeFile(existing,'unrelated bytes');
+  await assert.rejects(()=>engine.addDraft({mediaId:'m',formatId:'0'}),error=>error.code==='OUTPUT_NAME_CONFLICT'&&error.duplicates[0].path===existing&&/may be different/.test(error.duplicates[0].message));
+  const id=await engine.addDraft({mediaId:'m',formatId:'0',allowOutputCollision:true});assert.ok(id);await engine.close();
+});
 test('renamed byte-identical media matches by content and transfers its saved source identity',async()=>{
   const dir=await temp();const folder=path.join(dir,'folder');await mkdir(folder);const incoming=path.join(dir,'source.mp4'),original=path.join(folder,'original.mp4'),renamed=path.join(folder,'unrelated-name.webm');
   await writeFile(incoming,'same fixture bytes');await copyFile(incoming,original);

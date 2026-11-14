@@ -63,6 +63,15 @@ export class DuplicateLibrary{
     }return matches.slice(0,10);
   }
   publicMatch(entry,reason){return {path:entry.path,directory:path.dirname(entry.path),name:path.basename(entry.path),kind:entry.kind,size:entry.size,mtimeMs:entry.mtimeMs,quality:entry.quality||'Existing file',reason,message:reason==='visual'?'This looks like the same video, based on its duration and several frames.':reason==='exact'?'An identical file is already in this folder.':'This source media is already saved in this folder.'};}
+  async visualMatches(folder,signature){
+    if(!signature?.frames?.length)return [];
+    const matches=[];
+    for(const entry of this.entries){
+      if(entry.kind!=='video'||folderKey(path.dirname(entry.path))!==folderKey(folder)||!sameVideo(signature,entry.signature))continue;
+      if(await this.regular(entry.path))matches.push(this.publicMatch(entry,'visual'));
+    }
+    return matches.slice(0,10);
+  }
   async signature(file,cancelled=()=>false,onSpawn,expectedDuration){
     const options={timeout:25_000,onSpawn};
     const probe=JSON.parse(await this.run(this.tool('ffprobe'),['-v','error','-protocol_whitelist','file,pipe','-show_entries','format=duration:stream=codec_type','-of','json',file],options));

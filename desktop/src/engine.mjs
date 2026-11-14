@@ -10,7 +10,7 @@ import {loadThumbnail,thumbnailCandidates} from './thumbnail.mjs';
 import {PlaylistManager,playlistFormat} from './playlists.mjs';
 import {ToolStore} from './tool-store.mjs';
 import { startPublicProxy } from './public-proxy.mjs';
-import { DuplicateLibrary,sourceKeys } from './duplicates.mjs';
+import { DuplicateLibrary,sourceKeys,frameHash } from './duplicates.mjs';
 import {ownedStage,createStage,cleanStage} from './job-stage.mjs';
 import {transferArgs,createTransfer,updateTransfer} from './transfer.mjs';
 import {ToolVerifier,engineNames} from './tool-verifier.mjs';
@@ -27,7 +27,7 @@ export function processEnv() {
 export class LocalEngine extends EventEmitter {
   constructor({ toolsDir, stateDir, downloadsDir }) {
     super(); this.toolsDir=toolsDir; this.stateDir=stateDir; this.downloadsDir=downloadsDir;
-    this.jobs=[];this.committingJobs=new Set();this.settings={...defaultSettings};this.onboardingComplete=false;this.ready=false;this.initializing=true; this.media=new Map(); this.children=new Set();this.active=null; this.inspecting=false; this.closing=false; this.lastWrite=Promise.resolve();
+    this.jobs=[];this.committingJobs=new Set();this.settings={...defaultSettings};this.onboardingComplete=false;this.ready=false;this.initializing=true; this.media=new Map(); this.children=new Set();this.active=null; this.inspecting=false;this.visualChecking=false; this.closing=false; this.lastWrite=Promise.resolve();
     this.library=new DuplicateLibrary({stateDir,tool:name=>this.tool(name),run:(...args)=>this.run(...args),runBytes:(file,args,options)=>this.run(file,args,{...options,asBuffer:true})});
     this.loadThumbnail=loadThumbnail;
     this.playlists=new PlaylistManager(this);this.toolOverrides={};this.toolStore=new ToolStore(this);
@@ -35,7 +35,7 @@ export class LocalEngine extends EventEmitter {
     for(const name of engineNames){const record=engineManifest.engines[name];if(!record)throw Error('The trusted engine manifest is incomplete.');this.verifier.register(path.join(toolsDir,'bin',name+'.exe'),record.sha256,{size:record.bytes});}
   }
   tool(name) { return name==='yt-dlp'&&this.ytOverride?this.ytOverride:this.toolOverrides[name]||path.join(this.toolsDir,'bin',`${name}.exe`); }
-  assertIdleForUpdate(){if(this.active||this.inspecting||this.children.size||this.maintenance)throw Error('Pause downloads and wait for source checks to finish before updating the engine.');}
+  assertIdleForUpdate(){if(this.active||this.inspecting||this.visualChecking||this.children.size||this.maintenance)throw Error('Pause downloads and wait for source checks to finish before updating the engine.');}
   async loadDownloader(){
     try{const saved=JSON.parse(await readFile(path.join(this.stateDir,'engine-update.json'),'utf8'));if(saved.enabled===false)return;if(!/^\d{4}\.\d{2}\.\d{2}(?:\.\d+)?$/.test(saved.version)||!/^[a-f0-9]{64}$/.test(saved.sha256))throw Error();
       const file=path.join(this.stateDir,'engine-updates',`yt-dlp-${saved.version}.exe`),details=await lstat(file);if(!details.isFile()||details.isSymbolicLink()||details.size>80_000_000)throw Error();
@@ -83,7 +83,7 @@ export class LocalEngine extends EventEmitter {
     this.changed();
   }
   elapsedMs(job){return Math.max(0,Number(job.elapsedMs)||0)+(this.active?.job.id===job.id&&Number.isFinite(this.active.startedAt)?Math.max(0,(this.active.stoppedAt||Date.now())-this.active.startedAt):0);}
-  snapshot() { return { jobs:this.jobs.filter(j=>!this.committingJobs.has(j.id)).map(({format,sourceKeys,stageName,stageToken,...j})=>({...j,elapsedSeconds:Math.floor(this.elapsedMs(j)/1000),kind:format?.kind,resumable:['paused','interrupted'].includes(j.status)})),playlists:this.playlists.groups.filter(g=>!this.playlists.committingGroups.has(g.id)).map(g=>({...g,entries:g.entries.map(({source,...entry})=>entry)})),youtube:this.youtube?.snapshot()||{connected:false,needsReconnect:false},settings:{...this.settings},maintenance:Boolean(this.maintenance),toolStatus:this.toolStatus||null,engineUpdates:this.engineUpdates||null,engineUpdateWarning:this.engineUpdateWarning||null,downloadsDir:this.downloadsDir,onboardingComplete:this.onboardingComplete,ready:this.ready&&!this.maintenance,initializing:this.initializing,versions:this.versions,activeId:this.active?.job.id||null }; }
+  snapshot() { return { jobs:this.jobs.filter(j=>!this.committingJobs.has(j.id)).map(({format,sourceKeys,stageName,stageToken,...j})=>({...j,elapsedSeconds:Math.floor(this.elapsedMs(j)/1000),kind:format?.kind,resumable:['paused','interrupted'].includes(j.status)})),playlists:this.playlists.groups.filter(g=>!this.playlists.committingGroups.has(g.id)).map(g=>({...g,entries:g.entries.map(({source,...entry})=>entry)})),youtube:this.youtube?.snapshot()||{connected:false,needsReconnect:false},settings:{...this.settings},maintenance:Boolean(this.maintenance),visualChecking:Boolean(this.visualChecking),toolStatus:this.toolStatus||null,engineUpdates:this.engineUpdates||null,engineUpdateWarning:this.engineUpdateWarning||null,downloadsDir:this.downloadsDir,onboardingComplete:this.onboardingComplete,ready:this.ready&&!this.maintenance,initializing:this.initializing,versions:this.versions,activeId:this.active?.job.id||null }; }
   changed() {for(const job of this.jobs)if(job.playlistGroup)this.playlists.sync(job);this.emit('state',this.snapshot()); }
   save() {
     for(const job of this.jobs)if(job.playlistGroup)this.playlists.sync(job);
@@ -217,9 +217,38 @@ export class LocalEngine extends EventEmitter {
       return {...publicItem,duplicates:await this.library.known(keys,directory),formats:formats.map(({selector,...f})=>f)};
     } finally {this.inspecting=false;}
   }
+  async quickDuplicate({mediaId,formatId,directory=this.downloadsDir}={}){
+    if(this.closing||this.maintenance)throw Error('Wait for TurboSave to be ready.');
+    if(this.active||this.inspecting||this.visualChecking)throw Error('Wait for the current download or source check to finish.');
+    const media=this.media.get(mediaId),format=media?.formats.find(item=>item.id===formatId);
+    if(!media||Date.now()-media.created>30*60_000)throw Error('Fetch this link again before checking it.');
+    if(!format||format.kind!=='video')return {supported:false,message:'Quick visual check is available for video formats only. TurboSave will still verify the completed file.'};
+    if(!Number.isFinite(media.duration)||media.duration<10)return {supported:false,message:'Quick visual check needs a video at least 10 seconds long. TurboSave will still verify the completed file.'};
+    await this.checkFolder(directory);this.visualChecking=true;this.changed();
+    const probe={id:`visual-${randomUUID()}`,directory};
+    try{
+      const stage=await createStage(probe),frames=[];
+      for(const [index,part] of [.1,.3,.5,.7,.9].entries()){
+        const center=Math.max(1,Math.min(media.duration-1,media.duration*part)),start=Math.max(0,center-1),end=Math.min(media.duration,start+2.5),output=path.join(stage,`sample-${index}.%(ext)s`);
+        await this.run(this.tool('yt-dlp'),[...this.baseArgs(),'--no-continue','--no-part','--download-sections',`*${start}-${end}`,'--format',format.selector,'--output',output,'--',media.source],{timeout:90_000});
+        const file=(await readdir(stage)).map(name=>path.join(stage,name)).find(name=>path.basename(name)!=='.owner.json'&&allowedExtensions.includes(path.extname(name).slice(1).toLowerCase()));
+        if(!file)throw Error('The source did not provide a usable short sample.');
+        const bytes=await this.run(this.tool('ffmpeg'),['-v','error','-protocol_whitelist','file,pipe','-ss','0.5','-i',file,'-an','-sn','-frames:v','1','-vf','scale=9:8:flags=area,format=gray','-f','rawvideo','pipe:1'],{timeout:25_000,asBuffer:true});
+        frames.push(frameHash(bytes));await rm(file,{force:true});
+      }
+      const signature={version:1,duration:media.duration,frames},matches=await this.library.visualMatches(directory,signature);
+      return {supported:true,matches,message:matches.length?'A possible visual match was found. TurboSave will verify the completed file before saving.':'No visual match was found in TurboSave’s local download memory. Full verification still runs after download.'};
+    } finally {try{await cleanStage(probe);}catch{}this.visualChecking=false;this.changed();}
+  }
   enqueue(selection) {return this.createJob(selection,'queued');}
   addDraft(selection) {return this.createJob(selection,'draft');}
-  async createJob({mediaId,formatId,allowDuplicate=false,directory=this.downloadsDir},status) {
+  async outputNameConflict(media,format,directory){
+    const base=`${filename(media.title)} - ${filename(format.quality)}`;
+    const candidate=path.join(directory,`${base}.${format.extension}`),details=await lstat(candidate).catch(()=>null);
+    if(!details?.isFile()||details.isSymbolicLink())return null;
+    return {path:candidate,directory,name:path.basename(candidate),kind:format.kind,size:details.size,mtimeMs:details.mtimeMs,quality:'Existing filename',reason:'name',message:'A file with the same output name already exists in this folder. It may be different media.'};
+  }
+  async createJob({mediaId,formatId,allowDuplicate=false,allowOutputCollision=false,directory=this.downloadsDir},status) {
     if(this.closing)throw new Error('TurboSave is closing.');
     if(this.maintenance)throw Error('Wait for the engine update to finish.');
     const media=this.media.get(mediaId);
@@ -229,6 +258,7 @@ export class LocalEngine extends EventEmitter {
     await this.checkFolder(directory);
     const keys=media.keys||sourceKeys({},media.source);
     if(allowDuplicate!==true){const matches=await this.library.known(keys,directory,format.kind);if(matches.length){const error=new Error('This media is already saved in the selected folder.');error.code='DUPLICATE_MEDIA';error.duplicates=matches;throw error;}}
+    if(allowOutputCollision!==true){const match=await this.outputNameConflict(media,format,directory);if(match){const error=new Error('A file with the same output name already exists in the selected folder.');error.code='OUTPUT_NAME_CONFLICT';error.duplicates=[match];throw error;}}
     if(this.jobs.filter(j=>unfinished(j.status)).length>=20)throw new Error('Your batch and queue can hold 20 items. Remove an item or wait for a download to finish.');
     if(this.jobs.some(j=>(j.sourceKeys?.some(key=>keys.includes(key))||j.source===media.source)&&j.format?.selector===format.selector&&j.format?.kind===format.kind&&j.format?.extension===format.extension&&unfinished(j.status)))throw new Error('That format is already in your batch or queue.');
     const soundLabel=format.kind==='video'?{with:'With sound',without:'Without sound',unknown:'Sound not specified'}[format.sound]:null;

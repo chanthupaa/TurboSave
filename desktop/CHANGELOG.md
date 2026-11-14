@@ -1,5 +1,11 @@
 # Changes
 
+## Updates on the beta.5 source branch
+
+- Warn before downloading when the expected output filename already exists.
+- Add an optional visual duplicate check for single and batch video selections. It compares short samples with local saved-video fingerprints. A suggested match still requires verification before saving.
+- Display transfer speed in Mbps and check the combined TurboSave repository for desktop releases.
+
 ## 0.8.0-beta.5 — 2026-10-30
 
 - Remember an optional Firefox YouTube session with native consent, read-only YouTube cookie selection and Windows encryption; restore it after restarting and remove it with Disconnect.
